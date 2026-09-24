@@ -1,0 +1,27 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+
+# Scheduled functions (Netlify Background Functions with cron)
+[functions."scan"]
+  schedule = "0 */2 * * *"   # OSINT scan every 2 hours
+
+[functions."telegram"]
+  schedule = "*/30 * * * *"  # Telegram channel monitor every 30 min
