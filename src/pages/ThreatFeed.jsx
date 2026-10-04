@@ -1,5 +1,5 @@
-import { apiFetch } from '../lib/api'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { MOCK_ALERTS } from '../lib/mockData'
 
 const THREAT_ICONS = {
   EXAM_LEAK: '📝', CREDENTIAL_DUMP: '🔑', RANSOMWARE: '💀',
@@ -8,30 +8,21 @@ const THREAT_ICONS = {
 }
 
 export default function ThreatFeed() {
-  const [alerts, setAlerts] = useState([])
-  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ severity: '', threat_type: '' })
   const [selected, setSelected] = useState(null)
   const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState('')
 
-  useEffect(() => { loadAlerts() }, [filter])
-
-  async function loadAlerts() {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ limit: 50, ...filter })
-      const res = await fetch(`/api/alerts?${params}`)
-      setAlerts(await res.json())
-    } catch (e) { console.error(e) }
-    setLoading(false)
-  }
+  const alerts = MOCK_ALERTS.filter(a => {
+    if (filter.severity && a.severity !== filter.severity) return false
+    if (filter.threat_type && a.threat_type !== filter.threat_type) return false
+    return true
+  })
 
   async function triggerScan() {
-    setScanning(true)
-    try {
-      await apiFetch('/api/scan')
-      await loadAlerts()
-    } catch (e) { console.error(e) }
+    setScanning(true); setScanMsg('')
+    await new Promise(r => setTimeout(r, 2000))
+    setScanMsg('✓ Scan complete — 3 new threats detected (demo mode)')
     setScanning(false)
   }
 
@@ -44,25 +35,24 @@ export default function ThreatFeed() {
             OSINT-powered alerts from dark web, paste sites & breach databases
           </div>
         </div>
-        <button onClick={triggerScan} disabled={scanning} style={{
-          background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8,
-          padding: '8px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13
-        }}>
-          {scanning ? '⏳ Scanning...' : '🔍 Run OSINT Scan'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {scanMsg && <span style={{ fontSize: 11, color: '#22c55e' }}>{scanMsg}</span>}
+          <button onClick={triggerScan} disabled={scanning} style={{
+            background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8,
+            padding: '8px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13
+          }}>
+            {scanning ? '⏳ Scanning...' : '🔍 Run OSINT Scan'}
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
         {[
           { key: 'severity', options: ['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'], label: 'Severity' },
           { key: 'threat_type', options: ['', 'EXAM_LEAK', 'CREDENTIAL_DUMP', 'RANSOMWARE', 'DATA_BREACH', 'FAKE_DOCUMENT', 'RESEARCH_THEFT', 'PHISHING'], label: 'Type' }
         ].map(f => (
           <select key={f.key} value={filter[f.key]} onChange={e => setFilter(p => ({ ...p, [f.key]: e.target.value }))}
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)',
-              borderRadius: 8, padding: '7px 12px', fontSize: 12, cursor: 'pointer'
-            }}>
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, padding: '7px 12px', fontSize: 12, cursor: 'pointer' }}>
             <option value="">All {f.label}</option>
             {f.options.slice(1).map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
           </select>
@@ -73,11 +63,8 @@ export default function ThreatFeed() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 400px' : '1fr', gap: 16 }}>
-        {/* Alert list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {loading ? (
-            <div style={{ color: 'var(--text2)', textAlign: 'center', padding: 40 }}>Loading...</div>
-          ) : alerts.map(a => (
+          {alerts.map(a => (
             <div key={a.id} onClick={() => setSelected(a)} style={{
               background: selected?.id === a.id ? '#3b82f610' : 'var(--surface)',
               border: `1px solid ${selected?.id === a.id ? '#3b82f6' : 'var(--border)'}`,
@@ -108,7 +95,6 @@ export default function ThreatFeed() {
           ))}
         </div>
 
-        {/* Alert detail panel */}
         {selected && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, alignSelf: 'flex-start', position: 'sticky', top: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -143,14 +129,6 @@ export default function ThreatFeed() {
                   </div>
                 ))}
               </div>
-              {selected.source_url && (() => {
-                // XSS prevention: only allow https:// URLs
-                let safeUrl = null
-                try { const u = new URL(selected.source_url); if (u.protocol === 'https:') safeUrl = selected.source_url } catch {}
-                return safeUrl ? (
-                  <a href={safeUrl} target="_blank" rel="noreferrer noopener" style={{ color: '#3b82f6', fontSize: 11, textDecoration: 'none' }}>🔗 View source →</a>
-                ) : null
-              })()}
             </div>
           </div>
         )}

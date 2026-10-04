@@ -1,5 +1,5 @@
-import { apiFetch } from '../lib/api'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { MOCK_INSTITUTIONS } from '../lib/mockData'
 
 function RiskBar({ score }) {
   const color = score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444'
@@ -15,22 +15,12 @@ function RiskBar({ score }) {
 }
 
 export default function Institutions() {
-  const [institutions, setInstitutions] = useState([])
-  const [loading, setLoading] = useState(true)
   const [sort, setSort] = useState('risk_score')
-
-  useEffect(() => {
-    apiFetch('/api/institutions')
-      .then(r => r.json())
-      .then(data => { setInstitutions(data); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
+  const institutions = MOCK_INSTITUTIONS
 
   const sorted = [...institutions].sort((a, b) =>
     sort === 'risk_score' ? a.risk_score - b.risk_score : b.student_count - a.student_count
   )
-
-  if (loading) return <div style={{ padding: 40, color: 'var(--text2)', textAlign: 'center' }}>Loading institutions...</div>
 
   return (
     <div style={{ padding: 24 }}>
@@ -50,7 +40,6 @@ export default function Institutions() {
         </select>
       </div>
 
-      {/* Summary row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Critical Risk', value: institutions.filter(i => i.risk_score < 40).length, color: '#ef4444' },
@@ -65,7 +54,6 @@ export default function Institutions() {
         ))}
       </div>
 
-      {/* Institution cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {sorted.map(inst => (
           <div key={inst.id} style={{

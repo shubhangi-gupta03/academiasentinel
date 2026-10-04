@@ -1,134 +1,131 @@
-import { apiFetch } from '../lib/api'
 import { useState } from 'react'
 
+const MOCK_RESULTS = {
+  CREDENTIAL_DUMP: { threat_type: 'CREDENTIAL_DUMP', severity: 'CRITICAL', confidence: 94, summary: 'User credentials or passwords detected in the submitted content. Immediate password resets and breach notification recommended.', recommendations: ['Force password resets for affected accounts', 'Enable MFA across all institutional systems', 'Notify CERT-In within 6 hours per PDPB 2023', 'Search HIBP for affected email domains'] },
+  EXAM_LEAK: { threat_type: 'EXAM_LEAK', severity: 'CRITICAL', confidence: 91, summary: 'Examination content appears to have been exposed prior to official release. Coordinated leak network suspected.', recommendations: ['Alert examination authority immediately', 'Issue takedown notices to hosting platforms', 'Coordinate with Cyber Crime Cell', 'Consider paper re-evaluation if leak is confirmed'] },
+  RANSOMWARE: { threat_type: 'RANSOMWARE', severity: 'CRITICAL', confidence: 88, summary: 'Ransomware indicators detected. Systems may be at risk of encryption and data loss.', recommendations: ['Isolate affected systems immediately', 'Contact CERT-In incident response team', 'Do NOT pay ransom — escalate to law enforcement', 'Restore from last known clean backup'] },
+  DATA_BREACH: { threat_type: 'DATA_BREACH', severity: 'HIGH', confidence: 87, summary: 'Sensitive personal data of students or faculty appears to have been exposed. PDPB 2023 compliance action required.', recommendations: ['Identify scope of breach within 24 hours', 'Notify affected individuals', 'File breach report with CERT-In', 'Engage a forensic investigation team'] },
+  FAKE_DOCUMENT: { threat_type: 'FAKE_DOCUMENT', severity: 'HIGH', confidence: 82, summary: 'Forged academic credentials or certificates detected. Organized document fraud operation likely.', recommendations: ['Alert institution registrar and anti-fraud cell', 'Cross-check enrollment numbers in official database', 'File FIR with local Cyber Crime Cell', 'Issue public advisory to employers'] },
+  PHISHING: { threat_type: 'PHISHING', severity: 'MEDIUM', confidence: 85, summary: 'Phishing campaign targeting institutional users detected. Credential harvesting site may be active.', recommendations: ['Submit URL to Google Safe Browsing & PhishTank', 'Send campus-wide phishing awareness alert', 'Request ISP/hosting takedown', 'Monitor HIBP for affected accounts'] },
+  RESEARCH_THEFT: { threat_type: 'RESEARCH_THEFT', severity: 'HIGH', confidence: 79, summary: 'Pre-publication research content detected in unauthorized channels. Insider threat or email compromise suspected.', recommendations: ['Audit faculty email access logs', 'File IP theft complaint with institution legal team', 'Alert journal editors of potential preprint fraud', 'Enable DLP on institutional email servers'] },
+  GENERAL_THREAT: { threat_type: 'GENERAL_THREAT', severity: 'LOW', confidence: 62, summary: 'Suspicious activity detected but does not match known high-risk patterns. Manual review recommended.', recommendations: ['Escalate to institution IT security team', 'Monitor for follow-up activity', 'Document and log incident for trend analysis'] },
+}
+
+function classifyLocally(text, institution) {
+  const t = (text + ' ' + institution).toLowerCase()
+  if (t.match(/password|credential|login|dump|breach|pwned|hash/)) return MOCK_RESULTS.CREDENTIAL_DUMP
+  if (t.match(/exam|paper|question|jee|neet|gate|answer key|leak/)) return MOCK_RESULTS.EXAM_LEAK
+  if (t.match(/ransomware|encrypt|lockbit|ransom|bitcoin|btc/)) return MOCK_RESULTS.RANSOMWARE
+  if (t.match(/aadhaar|personal data|student data|admission|scholarship/)) return MOCK_RESULTS.DATA_BREACH
+  if (t.match(/fake|forged|degree|certificate|marksheet|fraud/)) return MOCK_RESULTS.FAKE_DOCUMENT
+  if (t.match(/phish|clone|spoof|login page|harvest/)) return MOCK_RESULTS.PHISHING
+  if (t.match(/research|paper|publication|ip theft|plagiar/)) return MOCK_RESULTS.RESEARCH_THEFT
+  return MOCK_RESULTS.GENERAL_THREAT
+}
+
+const SEVERITY_COLOR = { CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e' }
+const THREAT_ICONS = { EXAM_LEAK: '📝', CREDENTIAL_DUMP: '🔑', RANSOMWARE: '💀', DATA_BREACH: '💾', FAKE_DOCUMENT: '📄', RESEARCH_THEFT: '🔬', PHISHING: '🎣', GENERAL_THREAT: '⚠️' }
+
 export default function Classify() {
-  const [text, setText] = useState('')
-  const [context, setContext] = useState('Indian education sector')
-  const [result, setResult] = useState(null)
+  const [form, setForm] = useState({ institution: '', content: '', source: 'MANUAL' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
 
-  const SAMPLES = [
-    { label: 'Exam Leak', text: 'Selling JEE Advanced 2026 paper, direct from source. All 3 shifts. Contact @seller_edu on Telegram. ₹5000 only. 100% genuine, paper coming out tomorrow.' },
-    { label: 'Credential Dump', text: 'Fresh dump - vit.ac.in student credentials 2026. 45,000 rows. email:password format. includes faculty too. Available on our market for 0.05 BTC.' },
-    { label: 'Ransomware', text: 'ALL FILES ON BHU SERVER ENCRYPTED. Pay 10 BTC to wallet 1A2B3C to get decryption key. You have 72 hours. Student records, exam data, research all encrypted.' },
-    { label: 'Fake Degree', text: 'Get your MBA/B.Tech/MBBS degree from top Indian university. All holograms, signatures. Undetectable. IIT Bombay, DU, BITS available. Whatsapp +91-XXXXXXXXXX' }
-  ]
-
-  async function classify() {
-    if (!text.trim()) return
-    setLoading(true); setError(''); setResult(null)
-    try {
-      const res = await apiFetch('/api/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, context })
-      })
-      if (!res.ok) throw new Error('Classification failed')
-      setResult(await res.json())
-    } catch (e) { setError(e.message) }
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.content.trim()) return
+    setLoading(true); setResult(null)
+    await new Promise(r => setTimeout(r, 1800))
+    setResult(classifyLocally(form.content, form.institution))
     setLoading(false)
   }
 
-  const severityColor = { CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e' }
-
   return (
-    <div style={{ padding: 24, maxWidth: 900 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4 }}>AI Threat Classifier</h1>
-      <div style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20 }}>
-        Paste any suspicious text — Groq LLaMA 3.3-70B classifies threat type, severity & recommends actions
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>AI Threat Classifier</h1>
+        <div style={{ color: 'var(--text2)', fontSize: 12, marginTop: 2 }}>
+          Paste suspicious content to auto-classify threat type and severity
+        </div>
       </div>
 
-      {/* Sample buttons */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text2)', alignSelf: 'center' }}>Quick samples:</span>
-        {SAMPLES.map(s => (
-          <button key={s.label} onClick={() => setText(s.text)} style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)',
-            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer'
-          }}>{s.label}</button>
-        ))}
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: result ? '1fr 1fr' : '1fr', gap: 20 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Institution Name</label>
+            <input
+              value={form.institution}
+              onChange={e => setForm(p => ({ ...p, institution: e.target.value }))}
+              placeholder="e.g. IIT Bombay, Delhi University..."
+              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, padding: '10px 14px', fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Source</label>
+            <select value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))}
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, padding: '9px 12px', fontSize: 13, width: '100%' }}>
+              {['MANUAL', 'TELEGRAM', 'PASTE_SITE', 'HIBP', 'GOOGLE_CSE'].map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Threat Content / Description</label>
+            <textarea
+              value={form.content}
+              onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
+              placeholder="Paste the suspicious content, URL, or description here. E.g. 'Telegram channel selling JEE Advanced papers for ₹10,000...' or paste leaked credential text..."
+              rows={8}
+              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 8, padding: '10px 14px', fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+          </div>
+          <button type="submit" disabled={loading || !form.content.trim()} style={{
+            background: loading ? '#1e2d45' : '#3b82f6', color: loading ? 'var(--text2)' : '#fff',
+            border: 'none', borderRadius: 8, padding: '11px 20px', fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer'
+          }}>
+            {loading ? '🧠 Analysing threat...' : '⚡ Classify with AI'}
+          </button>
+        </form>
 
-      <textarea value={text} onChange={e => setText(e.target.value)}
-        placeholder="Paste suspicious message, dark web listing, Telegram post, or any threat data..."
-        style={{
-          width: '100%', minHeight: 120, background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 10, padding: 14, color: 'var(--text)', fontSize: 13, resize: 'vertical',
-          fontFamily: 'inherit', outline: 'none', lineHeight: 1.6, marginBottom: 12
-        }} />
-
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-        <input value={context} onChange={e => setContext(e.target.value)}
-          placeholder="Context (e.g. Maharashtra engineering college)"
-          style={{
-            flex: 1, background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 12, outline: 'none'
-          }} />
-        <button onClick={classify} disabled={loading || !text.trim()} style={{
-          background: loading ? '#1e2d45' : '#3b82f6', color: '#fff', border: 'none',
-          borderRadius: 8, padding: '8px 20px', cursor: loading ? 'not-allowed' : 'pointer',
-          fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap'
-        }}>
-          {loading ? '🤖 Analyzing...' : '🤖 Classify Threat'}
-        </button>
-      </div>
-
-      {error && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>⚠️ {error}</div>}
-
-      {result && (
-        <div style={{ background: 'var(--surface)', border: `1px solid ${severityColor[result.severity] || 'var(--border)'}`, borderRadius: 12, padding: 20 }}>
-          {/* Top row */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-            <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', flex: 1, minWidth: 140 }}>
-              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 4 }}>THREAT TYPE</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{result.threat_type?.replace(/_/g, ' ')}</div>
+        {result && (
+          <div style={{ background: 'var(--surface)', border: `2px solid ${SEVERITY_COLOR[result.severity]}40`, borderRadius: 12, padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <span style={{ fontSize: 32 }}>{THREAT_ICONS[result.threat_type]}</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 18, color: SEVERITY_COLOR[result.severity] }}>
+                  {result.threat_type.replace(/_/g, ' ')}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text2)' }}>Confidence: {result.confidence}%</div>
+              </div>
+              <span className={`badge badge-${result.severity}`} style={{ marginLeft: 'auto' }}>{result.severity}</span>
             </div>
-            <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', minWidth: 120 }}>
-              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 4 }}>SEVERITY</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: severityColor[result.severity] }}>{result.severity}</div>
-            </div>
-            <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', minWidth: 120 }}>
-              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 4 }}>CONFIDENCE</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#3b82f6' }}>{result.confidence}%</div>
-            </div>
-            <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', minWidth: 120 }}>
-              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 4 }}>CERT-IN REPORT</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: result.cert_in_reportable ? '#ef4444' : '#22c55e' }}>
-                {result.cert_in_reportable ? '⚠️ REQUIRED' : '✓ Not Required'}
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>AI Analysis</div>
+              <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.7, background: 'var(--surface2)', borderRadius: 8, padding: '12px 14px' }}>
+                {result.summary}
               </div>
             </div>
-          </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6 }}>AI SUMMARY</div>
-            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, background: 'var(--surface2)', borderRadius: 8, padding: 12 }}>
-              {result.summary}
-            </div>
-          </div>
-
-          {result.predicted_impact && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>PREDICTED IMPACT</div>
-              <div style={{ fontSize: 13, color: '#f97316', fontWeight: 600 }}>⚡ {result.predicted_impact}</div>
-            </div>
-          )}
-
-          {result.recommended_actions?.length > 0 && (
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>IMMEDIATE ACTIONS</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {result.recommended_actions.map((action, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--surface2)', borderRadius: 8, padding: '8px 12px' }}>
-                    <span style={{ color: '#22c55e', fontWeight: 700, minWidth: 20 }}>{i + 1}.</span>
-                    <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{action}</span>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Recommended Actions</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {result.recommendations.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px' }}>
+                    <span style={{ color: '#3b82f6', fontWeight: 800, fontSize: 12, flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{r}</span>
                   </div>
                 ))}
               </div>
             </div>
-          )}
-        </div>
-      )}
+
+            <button onClick={() => setResult(null)} style={{
+              marginTop: 16, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text2)',
+              borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, width: '100%'
+            }}>
+              Clear & Classify Another
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

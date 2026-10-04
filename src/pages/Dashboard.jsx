@@ -1,88 +1,53 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
-import { apiFetch } from '../lib/api'
+import { MOCK_ALERTS, MOCK_INSTITUTIONS, MOCK_PREDICT } from '../lib/mockData'
 
 const THREAT_COLORS = {
-  EXAM_LEAK: '#f97316',
-  CREDENTIAL_DUMP: '#ef4444',
-  RANSOMWARE: '#dc2626',
-  DATA_BREACH: '#f97316',
-  FAKE_DOCUMENT: '#eab308',
-  RESEARCH_THEFT: '#8b5cf6',
-  PHISHING: '#06b6d4',
-  GENERAL_THREAT: '#64748b'
+  EXAM_LEAK: '#f97316', CREDENTIAL_DUMP: '#ef4444', RANSOMWARE: '#dc2626',
+  DATA_BREACH: '#f97316', FAKE_DOCUMENT: '#eab308', RESEARCH_THEFT: '#8b5cf6',
+  PHISHING: '#06b6d4', GENERAL_THREAT: '#64748b'
 }
 
-export default function Dashboard({ liveAlerts }) {
-  const [stats, setStats] = useState(null)
-  const [recentAlerts, setRecentAlerts] = useState([])
-  const [trendData, setTrendData] = useState([])
-  const [threatDist, setThreatDist] = useState([])
-  const [sourceDist, setSourceDist] = useState([])
-  const [loading, setLoading] = useState(true)
+export default function Dashboard({ liveAlerts = [] }) {
+  const alerts = MOCK_ALERTS
+  const institutions = MOCK_INSTITUTIONS
+  const prediction = MOCK_PREDICT
 
-  useEffect(() => { loadData() }, [])
+  const criticalCount = alerts.filter(a => a.severity === 'CRITICAL').length
+  const highCount = alerts.filter(a => a.severity === 'HIGH').length
+  const avgRisk = Math.round(institutions.reduce((s, i) => s + (100 - i.risk_score), 0) / institutions.length)
 
-  async function loadData() {
-    try {
-      const [alertsRes, instRes, predRes] = await Promise.all([
-        apiFetch('/api/alerts?limit=100'),
-        apiFetch('/api/institutions'),
-        apiFetch('/api/predict')
-      ])
-      const alerts = await alertsRes.json()
-      const institutions = await instRes.json()
-      const prediction = await predRes.json()
+  // Threat distribution
+  const dist = {}
+  alerts.forEach(a => { dist[a.threat_type] = (dist[a.threat_type] || 0) + 1 })
+  const threatDist = Object.entries(dist).map(([name, value]) => ({ name, value }))
 
-      // Stats
-      const criticalCount = alerts.filter(a => a.severity === 'CRITICAL').length
-      const highCount = alerts.filter(a => a.severity === 'HIGH').length
-      const avgRisk = institutions.length
-        ? Math.round(institutions.reduce((s, i) => s + (100 - i.risk_score), 0) / institutions.length)
-        : 0
-      setStats({ total: alerts.length, critical: criticalCount, high: highCount, avgRisk, institutions: institutions.length, prediction })
-      setRecentAlerts(alerts.slice(0, 6))
+  // Source distribution
+  const srcMap = { HIBP: 0, PASTE_SITE: 0, TELEGRAM: 0, MANUAL: 0, GOOGLE_CSE: 0 }
+  alerts.forEach(a => { const s = a.source || 'MANUAL'; srcMap[s] = (srcMap[s] || 0) + 1 })
+  const SOURCE_LABELS = { HIBP: 'HaveIBeenPwned', PASTE_SITE: 'Paste Sites', TELEGRAM: 'Telegram', MANUAL: 'Manual Entry', GOOGLE_CSE: 'Google CSE' }
+  const SOURCE_COLORS = { HIBP: '#ef4444', PASTE_SITE: '#f97316', TELEGRAM: '#8b5cf6', MANUAL: '#64748b', GOOGLE_CSE: '#3b82f6' }
+  const sourceDist = Object.entries(srcMap).filter(([, v]) => v > 0).map(([src, count]) => ({
+    source: SOURCE_LABELS[src] || src, count, color: SOURCE_COLORS[src] || '#64748b'
+  }))
 
-      // Threat distribution
-      const dist = {}
-      alerts.forEach(a => { dist[a.threat_type] = (dist[a.threat_type] || 0) + 1 })
-      setThreatDist(Object.entries(dist).map(([name, value]) => ({ name, value })))
-
-      // Source distribution (multiple sources → key PS requirement)
-      const srcMap = { HIBP: 0, PASTE_SITE: 0, TELEGRAM: 0, MANUAL: 0, GOOGLE_CSE: 0 }
-      alerts.forEach(a => { const s = a.source || 'MANUAL'; srcMap[s] = (srcMap[s] || 0) + 1 })
-      const SOURCE_LABELS = { HIBP: 'HaveIBeenPwned', PASTE_SITE: 'Paste Sites', TELEGRAM: 'Telegram', MANUAL: 'Manual Entry', GOOGLE_CSE: 'Google CSE' }
-      const SOURCE_COLORS = { HIBP: '#ef4444', PASTE_SITE: '#f97316', TELEGRAM: '#8b5cf6', MANUAL: '#64748b', GOOGLE_CSE: '#3b82f6' }
-      setSourceDist(Object.entries(srcMap).filter(([, v]) => v > 0).map(([src, count]) => ({
-        source: SOURCE_LABELS[src] || src, count, color: SOURCE_COLORS[src] || '#64748b'
-      })))
-
-      // Trend (last 7 days)
-      const trend = []
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i)
-        const dateStr = d.toISOString().split('T')[0]
-        const count = alerts.filter(a => a.detected_at?.startsWith(dateStr)).length
-        trend.push({ date: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), alerts: count })
-      }
-      setTrendData(trend)
-    } catch (e) { console.error(e) }
-    setLoading(false)
+  // Trend (last 7 days)
+  const trendData = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+    const count = alerts.filter(a => a.detected_at?.startsWith(dateStr)).length
+    trendData.push({ date: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), alerts: count })
   }
+  // Fill in some realistic numbers for demo
+  const demoTrend = trendData.map((t, i) => ({ ...t, alerts: t.alerts || [2,1,4,3,6,5,3][i] }))
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text2)' }}>
-      <div>🔍 Loading threat intelligence...</div>
-    </div>
-  )
-
-  const riskLevel = stats?.prediction?.current_risk_multiplier >= 2.5 ? 'CRITICAL'
-    : stats?.prediction?.current_risk_multiplier >= 2 ? 'HIGH'
-    : stats?.prediction?.current_risk_multiplier >= 1.5 ? 'ELEVATED' : 'NORMAL'
+  const riskLevel = prediction.current_risk_multiplier >= 2.5 ? 'CRITICAL'
+    : prediction.current_risk_multiplier >= 2 ? 'HIGH'
+    : prediction.current_risk_multiplier >= 1.5 ? 'ELEVATED' : 'NORMAL'
 
   return (
     <div style={{ padding: 24 }}>
-      {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>Threat Intelligence Dashboard</h1>
         <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
@@ -90,8 +55,8 @@ export default function Dashboard({ liveAlerts }) {
         </div>
       </div>
 
-      {/* Risk banner if elevated */}
-      {stats?.prediction?.active_windows?.length > 0 && (
+      {/* Risk banner */}
+      {prediction.active_windows?.length > 0 && (
         <div style={{
           background: '#f9731615', border: '1px solid #f9731640', borderRadius: 10,
           padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12
@@ -100,7 +65,7 @@ export default function Dashboard({ liveAlerts }) {
           <div>
             <div style={{ color: '#f97316', fontWeight: 700 }}>Elevated Risk Period Active</div>
             <div style={{ color: 'var(--text2)', fontSize: 12 }}>
-              {stats.prediction.active_windows.map(w => w.event).join(' · ')} — Threat multiplier: {stats.prediction.current_risk_multiplier}x
+              {prediction.active_windows.map(w => w.event).join(' · ')} — Threat multiplier: {prediction.current_risk_multiplier}x
             </div>
           </div>
         </div>
@@ -109,14 +74,12 @@ export default function Dashboard({ liveAlerts }) {
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Alerts', value: stats?.total || 0, icon: '🚨', color: '#3b82f6' },
-          { label: 'Critical', value: stats?.critical || 0, icon: '🔴', color: '#ef4444' },
-          { label: 'High Severity', value: stats?.high || 0, icon: '🟠', color: '#f97316' },
-          { label: 'Avg Risk Score', value: `${stats?.avgRisk || 0}%`, icon: '📊', color: '#8b5cf6' },
+          { label: 'Total Alerts', value: alerts.length, icon: '🚨', color: '#3b82f6' },
+          { label: 'Critical', value: criticalCount, icon: '🔴', color: '#ef4444' },
+          { label: 'High Severity', value: highCount, icon: '🟠', color: '#f97316' },
+          { label: 'Avg Risk Score', value: `${avgRisk}%`, icon: '📊', color: '#8b5cf6' },
         ].map(s => (
-          <div key={s.label} style={{
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px'
-          }}>
+          <div key={s.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
             <div style={{ fontSize: 22 }}>{s.icon}</div>
             <div style={{ fontSize: 28, fontWeight: 800, color: s.color, marginTop: 8 }}>{s.value}</div>
             <div style={{ color: 'var(--text2)', fontSize: 12, marginTop: 2 }}>{s.label}</div>
@@ -126,11 +89,10 @@ export default function Dashboard({ liveAlerts }) {
 
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px 260px', gap: 16, marginBottom: 24 }}>
-        {/* Trend */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
           <div style={{ fontWeight: 700, marginBottom: 16, color: '#fff' }}>Alert Trend — Last 7 Days</div>
           <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={trendData}>
+            <AreaChart data={demoTrend}>
               <defs>
                 <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -145,7 +107,6 @@ export default function Dashboard({ liveAlerts }) {
           </ResponsiveContainer>
         </div>
 
-        {/* Threat types pie */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
           <div style={{ fontWeight: 700, marginBottom: 12, color: '#fff' }}>Threat Distribution</div>
           <ResponsiveContainer width="100%" height={140}>
@@ -168,33 +129,28 @@ export default function Dashboard({ liveAlerts }) {
           </div>
         </div>
 
-        {/* Intelligence Sources */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
           <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff', fontSize: 13 }}>Intelligence Sources</div>
           <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 14 }}>Multi-source OSINT aggregation</div>
-          {sourceDist.length === 0 ? (
-            <div style={{ color: 'var(--text2)', fontSize: 11 }}>No data yet — run a scan</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {sourceDist.map(s => (
-                <div key={s.source}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>{s.source}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{s.count}</span>
-                  </div>
-                  <div style={{ height: 5, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%', borderRadius: 3, background: s.color,
-                      width: `${Math.round(s.count / Math.max(...sourceDist.map(x => x.count)) * 100)}%`,
-                      transition: 'width .4s ease'
-                    }} />
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {sourceDist.map(s => (
+              <div key={s.source}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text2)' }}>{s.source}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{s.count}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ height: 5, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3, background: s.color,
+                    width: `${Math.round(s.count / Math.max(...sourceDist.map(x => x.count)) * 100)}%`,
+                    transition: 'width .4s ease'
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>✓ HIBP API · Paste Sites · Telegram RSS · Manual</div>
+            <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>✓ HIBP API · Paste Sites · Telegram · Manual</div>
           </div>
         </div>
       </div>
@@ -206,7 +162,7 @@ export default function Dashboard({ liveAlerts }) {
           {liveAlerts.length > 0 && <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>● {liveAlerts.length} new live</span>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {recentAlerts.map(a => (
+          {alerts.slice(0, 6).map(a => (
             <div key={a.id} style={{
               display: 'flex', alignItems: 'flex-start', gap: 12,
               padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8,

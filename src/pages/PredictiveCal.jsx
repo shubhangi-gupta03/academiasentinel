@@ -1,23 +1,12 @@
-import { apiFetch } from '../lib/api'
-import { useState, useEffect } from 'react'
+import { MOCK_PREDICT } from '../lib/mockData'
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+const multiplierColor = m => m >= 2.5 ? '#ef4444' : m >= 2 ? '#f97316' : m >= 1.5 ? '#eab308' : '#22c55e'
+const riskLabel = m => m >= 2.5 ? 'CRITICAL' : m >= 2 ? 'HIGH' : m >= 1.5 ? 'ELEVATED' : 'NORMAL'
+
 export default function PredictiveCal() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    apiFetch('/api/predict')
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
-
-  if (loading) return <div style={{ padding: 40, color: 'var(--text2)' }}>Loading risk calendar...</div>
-
-  const multiplierColor = m => m >= 2.5 ? '#ef4444' : m >= 2 ? '#f97316' : m >= 1.5 ? '#eab308' : '#22c55e'
-  const riskLabel = m => m >= 2.5 ? 'CRITICAL' : m >= 2 ? 'HIGH' : m >= 1.5 ? 'ELEVATED' : 'NORMAL'
+  const data = MOCK_PREDICT
 
   return (
     <div style={{ padding: 24 }}>
@@ -28,21 +17,21 @@ export default function PredictiveCal() {
 
       {/* Current risk banner */}
       <div style={{
-        background: `${multiplierColor(data?.current_risk_multiplier || 1)}15`,
-        border: `1px solid ${multiplierColor(data?.current_risk_multiplier || 1)}40`,
+        background: `${multiplierColor(data.current_risk_multiplier)}15`,
+        border: `1px solid ${multiplierColor(data.current_risk_multiplier)}40`,
         borderRadius: 12, padding: '16px 20px', marginBottom: 24,
         display: 'flex', alignItems: 'center', gap: 16
       }}>
         <div style={{ fontSize: 36 }}>
-          {data?.current_risk_multiplier >= 2.5 ? '🚨' : data?.current_risk_multiplier >= 2 ? '⚠️' : '📊'}
+          {data.current_risk_multiplier >= 2.5 ? '🚨' : data.current_risk_multiplier >= 2 ? '⚠️' : '📊'}
         </div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 16, color: multiplierColor(data?.current_risk_multiplier || 1) }}>
-            Current Risk Level: {riskLabel(data?.current_risk_multiplier || 1)}
+          <div style={{ fontWeight: 800, fontSize: 16, color: multiplierColor(data.current_risk_multiplier) }}>
+            Current Risk Level: {riskLabel(data.current_risk_multiplier)}
           </div>
           <div style={{ color: 'var(--text2)', fontSize: 12, marginTop: 2 }}>
-            Threat multiplier: {data?.current_risk_multiplier}x baseline
-            {data?.active_windows?.length > 0
+            Threat multiplier: {data.current_risk_multiplier}x baseline
+            {data.active_windows?.length > 0
               ? ` · Active: ${data.active_windows.map(w => w.event).join(', ')}`
               : ' · No high-risk events active right now'}
           </div>
@@ -50,7 +39,7 @@ export default function PredictiveCal() {
       </div>
 
       {/* Upcoming risk windows */}
-      {data?.upcoming_high_risk?.length > 0 && (
+      {data.upcoming_high_risk?.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontWeight: 700, color: '#fff', marginBottom: 12 }}>Upcoming High-Risk Windows</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -85,7 +74,7 @@ export default function PredictiveCal() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
           {MONTH_NAMES.map((month, idx) => {
             const monthNum = idx + 1
-            const events = data?.risk_calendar?.filter(e => e.month === monthNum) || []
+            const events = data.risk_calendar?.filter(e => e.month === monthNum) || []
             const maxMult = events.length ? Math.max(...events.map(e => e.risk_multiplier)) : 1
             const color = multiplierColor(maxMult)
             const label = riskLabel(maxMult)
